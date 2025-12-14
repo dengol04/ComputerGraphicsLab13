@@ -1,0 +1,195 @@
+#include <iostream>
+#include <vector>
+#include <string>
+#include <fstream>
+#include <sstream>
+#include <stdexcept>
+
+#include <GL/glew.h>
+#include <SFML/Graphics.hpp>
+#include <SFML/OpenGL.hpp>
+
+struct Vertex {
+    float x, y, z;
+    float u, v;
+};
+
+Vertex createVertex(int posIndex, int uvIndex,
+    const std::vector<sf::Vector3f>& positions,
+    const std::vector<sf::Vector2f>& uvs)
+{
+    Vertex v = { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
+    int p_idx = posIndex - 1;
+    int t_idx = uvIndex - 1;
+    const float TEXTURE_SCALE = 1.0f;
+
+    if (p_idx >= 0 && p_idx < positions.size()) {
+        v.x = positions[p_idx].x;
+        v.y = positions[p_idx].y;
+        v.z = positions[p_idx].z;
+    }
+
+    if (t_idx >= 0 && t_idx < uvs.size()) {
+        v.u = uvs[t_idx].x * TEXTURE_SCALE;
+        v.v = (1.0f - uvs[t_idx].y) * TEXTURE_SCALE;
+    }
+
+    return v;
+}
+
+std::vector<Vertex> loadModel(const std::string& filename) {
+    std::vector<sf::Vector3f> positions;
+    std::vector<sf::Vector2f> uvs;
+    std::vector<Vertex> finalVertices;
+
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+        std::cerr << "Файл " << filename << " не найден." << std::endl;
+        return finalVertices;
+    }
+
+    std::string line;
+    while (std::getline(file, line)) {
+        std::stringstream ss(line);
+        std::string prefix;
+        ss >> prefix;
+
+        if (prefix == "v") {
+            float x, y, z;
+            ss >> x >> y >> z;
+            positions.push_back({ x, y, z });
+        }
+        else if (prefix == "vt") {
+            float u, v;
+            ss >> u >> v;
+            uvs.push_back({ u, v });
+        }
+        else if (prefix == "f") {
+            std::vector<int> currentFaceIndices;
+            std::string vertexData;
+
+            while (ss >> vertexData) {
+                if (vertexData.empty()) continue;
+                std::stringstream vss(vertexData);
+                std::string indexStr;
+                int v_index = 0, vt_index = 0;
+
+                for (int k = 0; std::getline(vss, indexStr, '/'); k++) {
+                    if (indexStr.empty()) continue;
+                    try {
+                        int index = std::stoi(indexStr);
+                        if (k == 0) v_index = index;
+                        else if (k == 1) vt_index = index;
+                    }
+                    catch (...) {}
+                }
+                currentFaceIndices.push_back(v_index);
+                currentFaceIndices.push_back(vt_index);
+            }
+
+            int numVertices = currentFaceIndices.size() / 2;
+            if (numVertices < 3) continue;
+
+            int v1_index = currentFaceIndices[0];
+            int vt1_index = currentFaceIndices[1];
+
+            for (int i = 1; i < numVertices - 1; ++i) {
+                int v2_index = currentFaceIndices[i * 2];
+                int vt2_index = currentFaceIndices[i * 2 + 1];
+                int v3_index = currentFaceIndices[(i + 1) * 2];
+                int vt3_index = currentFaceIndices[(i + 1) * 2 + 1];
+
+                finalVertices.push_back(createVertex(v1_index, vt1_index, positions, uvs));
+                finalVertices.push_back(createVertex(v2_index, vt2_index, positions, uvs));
+                finalVertices.push_back(createVertex(v3_index, vt3_index, positions, uvs));
+            }
+        }
+    }
+    return finalVertices;
+}
+
+int main() {
+    sf::ContextSettings settings;
+    settings.depthBits = 24;
+    settings.majorVersion = 3; settings.minorVersion = 0;
+    sf::RenderWindow window(sf::VideoMode(800, 600), "Lab CG", sf::Style::Default, settings);
+    window.setVerticalSyncEnabled(true);
+    window.setActive(true);
+
+    glewExperimental = GL_TRUE;
+    if (glewInit() != GLEW_OK) return -1;
+
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_TEXTURE_2D);
+    glClearColor(0.05f, 0.05f, 0.1f, 1.0f);
+
+    sf::Texture texture;
+    if (!texture.loadFromFile("./skull.jpg")) {
+        sf::Image img; img.create(64, 64, sf::Color::Cyan);
+        texture.loadFromImage(img);
+    }
+    sf::Texture::bind(&texture);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glGenerateMipmap(GL_TEXTURE_2D);
+
+    std::vector<Vertex> modelData = loadModel("./Skull.obj");
+    if (modelData.empty()) return -1;
+
+    GLuint vboID;
+    glGenBuffers(1, &vboID);
+    glBindBuffer(GL_ARRAY_BUFFER, vboID);
+    glBufferData(GL_ARRAY_BUFFER, modelData.size() * sizeof(Vertex), modelData.data(), GL_STATIC_DRAW);
+
+    glEnableClientState(GL_VERTEX_ARRAY);
+    glVertexPointer(3, GL_FLOAT, sizeof(Vertex), (void*)0);
+    glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+    glTexCoordPointer(2, GL_FLOAT, sizeof(Vertex), (void*)(3 * sizeof(float)));
+
+    std::vector<sf::Vector3f> positions = {
+        {0.0f, 0.0f, 0.0f},
+        {-6.0f, 2.0f, -5.0f},
+        {6.0f, -2.0f, -5.0f}, 
+        {-4.0f, -4.0f, 3.0f}, 
+        {4.0f, 4.0f, 3.0f}    
+    };
+
+    const float MODEL_SCALE = 0.1f;
+    std::vector<float> rotations = { 0.0f, 45.0f, -45.0f, 135.0f, -135.0f };
+
+    while (window.isOpen()) {
+        sf::Event event;
+        while (window.pollEvent(event)) {
+            if (event.type == sf::Event::Closed) window.close();
+            if (event.type == sf::Event::Resized) glViewport(0, 0, event.size.width, event.size.height);
+        }
+
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        glMatrixMode(GL_PROJECTION);
+        glLoadIdentity();
+        float aspect = (float)window.getSize().x / window.getSize().y;
+        glFrustum(-aspect * 0.5f, aspect * 0.5f, -0.5f, 0.5f, 1.0f, 100.0f);
+
+        glMatrixMode(GL_MODELVIEW);
+        glLoadIdentity();
+        glTranslatef(0.0f, 0.0f, -15.0f);
+        glRotatef(275.0f, 1.0f, 0.0f, 0.0f);
+
+        for (size_t i = 0; i < positions.size(); ++i) {
+            glPushMatrix();
+            glTranslatef(positions[i].x, positions[i].y, positions[i].z);
+            glRotatef(rotations[i], 0.0f, 1.0f, 0.0f);
+            glScalef(MODEL_SCALE, MODEL_SCALE, MODEL_SCALE);
+            glDrawArrays(GL_TRIANGLES, 0, modelData.size());
+            glPopMatrix();
+        }
+
+        window.display();
+    }
+    glDeleteBuffers(1, &vboID);
+    return 0;
+}
