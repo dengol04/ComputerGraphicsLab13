@@ -56,3 +56,5 @@ _CPack_Packages/
 *~
 *.swp
 *.tmp
+
+!Skull.obj
