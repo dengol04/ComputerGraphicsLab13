@@ -4,6 +4,7 @@
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
+#include <cmath>
 
 #include <GL/glew.h>
 #include <SFML/Graphics.hpp>
@@ -12,6 +13,14 @@
 struct Vertex {
     float x, y, z;
     float u, v;
+};
+
+struct PlanetParams {
+    float distance;
+    float orbitSpeed;
+    float selfSpeed;
+    float scale;
+    float startAngle;
 };
 
 Vertex createVertex(int posIndex, int uvIndex,
@@ -44,7 +53,7 @@ std::vector<Vertex> loadModel(const std::string& filename) {
 
     std::ifstream file(filename);
     if (!file.is_open()) {
-        std::cerr << "Файл " << filename << " не найден." << std::endl;
+        std::cerr << "Error opening " << filename << std::endl;
         return finalVertices;
     }
 
@@ -121,7 +130,7 @@ int main() {
 
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_TEXTURE_2D);
-    glClearColor(0.05f, 0.05f, 0.1f, 1.0f);
+    glClearColor(0.05f, 0.05f, 0.05f, 1.0f);
 
     sf::Texture texture;
     if (!texture.loadFromFile("./skull.jpg")) {
@@ -149,16 +158,15 @@ int main() {
     glEnableClientState(GL_TEXTURE_COORD_ARRAY);
     glTexCoordPointer(2, GL_FLOAT, sizeof(Vertex), (void*)(3 * sizeof(float)));
 
-    std::vector<sf::Vector3f> positions = {
-        {0.0f, 0.0f, 0.0f},
-        {-6.0f, 2.0f, -5.0f},
-        {6.0f, -2.0f, -5.0f}, 
-        {-4.0f, -4.0f, 3.0f}, 
-        {4.0f, 4.0f, 3.0f}    
+    std::vector<PlanetParams> planets = {
+        { 5.0f,  45.0f, 100.0f, 0.06f, 0.0f },
+        { 7.5f,  30.0f, 80.0f,  0.08f, 90.0f },
+        { 10.5f, 22.0f, 120.0f, 0.09f, 180.0f },
+        { 14.0f, 18.0f, 90.0f,  0.07f, 270.0f },
+        { 19.0f, 10.0f, 150.0f, 0.15f, 45.0f }
     };
 
-    const float MODEL_SCALE = 0.1f;
-    std::vector<float> rotations = { 0.0f, 45.0f, -45.0f, 135.0f, -135.0f };
+    sf::Clock clock;
 
     while (window.isOpen()) {
         sf::Event event;
@@ -167,24 +175,39 @@ int main() {
             if (event.type == sf::Event::Resized) glViewport(0, 0, event.size.width, event.size.height);
         }
 
+        float time = clock.getElapsedTime().asSeconds();
+
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         glMatrixMode(GL_PROJECTION);
         glLoadIdentity();
         float aspect = (float)window.getSize().x / window.getSize().y;
-        glFrustum(-aspect * 0.5f, aspect * 0.5f, -0.5f, 0.5f, 1.0f, 100.0f);
+        glFrustum(-aspect * 0.5f, aspect * 0.5f, -0.5f, 0.5f, 1.0f, 120.0f);
 
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
-        glTranslatef(0.0f, 0.0f, -15.0f);
-        glRotatef(275.0f, 1.0f, 0.0f, 0.0f);
+        glTranslatef(0.0f, 0.0f, -35.0f);
+        glRotatef(30.0f, 1.0f, 0.0f, 0.0f);
 
-        for (size_t i = 0; i < positions.size(); ++i) {
-            glPushMatrix();
-            glTranslatef(positions[i].x, positions[i].y, positions[i].z);
-            glRotatef(rotations[i], 0.0f, 1.0f, 0.0f);
-            glScalef(MODEL_SCALE, MODEL_SCALE, MODEL_SCALE);
+        glPushMatrix();
+        {
+            glRotatef(time * 15.0f, 0.0f, 1.0f, 0.0f);
+            float sunScale = 0.3f;
+            glScalef(sunScale, sunScale, sunScale);
             glDrawArrays(GL_TRIANGLES, 0, modelData.size());
+        }
+        glPopMatrix();
+
+        for (const auto& planet : planets) {
+            glPushMatrix();
+
+            glRotatef(time * planet.orbitSpeed + planet.startAngle, 0.0f, 1.0f, 0.0f);
+            glTranslatef(planet.distance, 0.0f, 0.0f);
+            glRotatef(time * planet.selfSpeed, 0.0f, 1.0f, 0.0f);
+            glScalef(planet.scale, planet.scale, planet.scale);
+
+            glDrawArrays(GL_TRIANGLES, 0, modelData.size());
+
             glPopMatrix();
         }
 
