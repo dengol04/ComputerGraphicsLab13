@@ -117,9 +117,9 @@ std::vector<Vertex> loadModel(const std::string& filename) {
     return finalVertices;
 }
 
-sf::Vector3f camPos(0.0f, 3.0f, 25.0f);
-float camYaw = 0.0f;
-float camPitch = 0.0f;
+sf::Vector3f camPos(-15.0f, 15.0f, 35.0f);
+float camYaw = -30.0f;
+float camPitch = -15.0f;
 
 float camSpeed = 60.0f;
 
