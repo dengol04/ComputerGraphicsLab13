@@ -117,6 +117,12 @@ std::vector<Vertex> loadModel(const std::string& filename) {
     return finalVertices;
 }
 
+sf::Vector3f camPos(0.0f, 3.0f, 25.0f);
+float camYaw = 0.0f;
+float camPitch = 0.0f;
+
+float camSpeed = 60.0f;
+
 int main() {
     sf::ContextSettings settings;
     settings.depthBits = 24;
@@ -166,7 +172,8 @@ int main() {
         { 19.0f, 10.0f, 150.0f, 0.15f, 45.0f }
     };
 
-    sf::Clock clock;
+    sf::Clock frameClock;
+    sf::Clock globalClock;
 
     while (window.isOpen()) {
         sf::Event event;
@@ -175,7 +182,57 @@ int main() {
             if (event.type == sf::Event::Resized) glViewport(0, 0, event.size.width, event.size.height);
         }
 
-        float time = clock.getElapsedTime().asSeconds();
+        float deltaTime = frameClock.restart().asSeconds();
+
+        float radYaw = camYaw * 3.1415926f / 180.0f;
+        float radPitch = camPitch * 3.1415926f / 180.0f;
+
+        sf::Vector3f forward(
+            -sinf(radYaw) * cosf(radPitch),
+            sinf(radPitch),
+            -cosf(radYaw) * cosf(radPitch)
+        );
+
+        sf::Vector3f right(
+            cosf(radYaw),
+            0.0f,
+           -sinf(radYaw)
+        );
+
+        sf::Vector3f Up(
+            -forward.x * forward.y,
+            1.0f - forward.y * forward.y,
+            -forward.z * forward.y
+        );
+
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::W))
+            camPos += forward * camSpeed * deltaTime;
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::S))
+            camPos -= forward * camSpeed * deltaTime;
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::A))
+            camPos -= right * camSpeed * deltaTime;
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::D))
+            camPos += right * camSpeed * deltaTime;
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Q)) 
+            camPos += Up * camSpeed * deltaTime;
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::E)) 
+            camPos -= Up * camSpeed * deltaTime;
+
+        float rotSpeed = 90.0f;
+
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Left))
+            camYaw += rotSpeed * deltaTime;
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Right))
+            camYaw -= rotSpeed * deltaTime;
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Up))
+            camPitch += rotSpeed * deltaTime;
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Down))
+            camPitch -= rotSpeed * deltaTime;
+
+        if (camPitch > 89.0f)  camPitch = 89.0f;
+        if (camPitch < -89.0f) camPitch = -89.0f;
+
+        float time = globalClock.getElapsedTime().asSeconds();
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -186,8 +243,10 @@ int main() {
 
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
-        glTranslatef(0.0f, 0.0f, -35.0f);
-        glRotatef(30.0f, 1.0f, 0.0f, 0.0f);
+
+        glRotatef(-camPitch, 1.0f, 0.0f, 0.0f);
+        glRotatef(-camYaw, 0.0f, 1.0f, 0.0f);
+        glTranslatef(-camPos.x, -camPos.y, -camPos.z);
 
         glPushMatrix();
         {
@@ -212,6 +271,7 @@ int main() {
         }
 
         window.display();
+
     }
     glDeleteBuffers(1, &vboID);
     return 0;
